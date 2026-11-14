@@ -1159,55 +1159,6 @@ public class LocalLibraryServiceTests : IDisposable
                 Title = "Welcome To Heartbreak (Album Version)",
                 Artist = "Kanye West",
                 Duration = 262,
-                Isrc = "USUM70800001",
-                ExternalProvider = "qobuz",
-                ExternalId = "42"
-            });
-
-        string? searchUrl = null;
-        _mockHandler.Protected()
-            .Setup<Task<HttpResponseMessage>>("SendAsync",
-                ItExpr.IsAny<HttpRequestMessage>(),
-                ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync((HttpRequestMessage req, CancellationToken _) =>
-            {
-                var url = req.RequestUri?.ToString() ?? "";
-                if (url.Contains("search3"))
-                {
-                    searchUrl = url;
-                    return new HttpResponseMessage(HttpStatusCode.OK)
-                    {
-                        Content = new StringContent("{\"subsonic-response\":{\"searchResult3\":{\"song\":[" +
-                            "{\"id\":\"cover\",\"title\":\"Welcome To Heartbreak (Piano Version)\",\"artist\":\"Kanye West\",\"duration\":180}," +
-                            "{\"id\":\"owned\",\"title\":\"Welcome To Heartbreak\",\"artist\":\"Kanye West, Kid Cudi\",\"duration\":263,\"isrc\":[\"USUM70800001\"]}" +
-                            "]}}}")
-                    };
-                }
-
-                return new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = new StringContent("{\"subsonic-response\":{\"status\":\"ok\"}}")
-                };
-            });
-
-        var result = await _service.GetLocalIdForExternalSongAsync("qobuz", "42");
-
-        Assert.Equal("owned", result);
-        Assert.NotNull(searchUrl);
-        Assert.Contains("query=Kanye West Welcome To Heartbreak", Uri.UnescapeDataString(searchUrl));
-        Assert.DoesNotContain("Album", searchUrl);
-    }
-
-    [Fact]
-    public async Task GetLocalIdForExternalSongAsync_QobuzWithoutIsrc_DoesNotReuseTitleArtistMatch()
-    {
-        _mockMetadataService
-            .Setup(x => x.GetSongAsync("qobuz", "42"))
-            .ReturnsAsync(new Song
-            {
-                Title = "Welcome To Heartbreak (Album Version)",
-                Artist = "Kanye West",
-                Duration = 262,
                 ExternalProvider = "qobuz",
                 ExternalId = "42"
             });
@@ -1240,11 +1191,52 @@ public class LocalLibraryServiceTests : IDisposable
 
         var result = await _service.GetLocalIdForExternalSongAsync("qobuz", "42");
 
-        // Qobuz clean/explicit pairs share tags once edition labels are stripped;
-        // without an ISRC the library copy cannot be proven to be the same recording.
-        Assert.Null(result);
+        Assert.Equal("owned", result);
         Assert.NotNull(searchUrl);
         Assert.Contains("query=Kanye West Welcome To Heartbreak", Uri.UnescapeDataString(searchUrl));
         Assert.DoesNotContain("Album", searchUrl);
+    }
+
+    [Fact]
+    public async Task GetLocalIdForExternalSongAsync_ExplicitTrack_SkipsCleanLibraryCopy()
+    {
+        _mockMetadataService
+            .Setup(x => x.GetSongAsync("qobuz", "43"))
+            .ReturnsAsync(new Song
+            {
+                Title = "Gold Digger (Explicit)",
+                Artist = "Kanye West",
+                Duration = 207,
+                IsExplicit = true,
+                ExternalProvider = "qobuz",
+                ExternalId = "43"
+            });
+
+        _mockHandler.Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync((HttpRequestMessage req, CancellationToken _) =>
+            {
+                if (req.RequestUri?.ToString().Contains("search3") == true)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("{\"subsonic-response\":{\"searchResult3\":{\"song\":[" +
+                            "{\"id\":\"clean\",\"title\":\"Gold Digger (Clean)\",\"artist\":\"Kanye West\",\"duration\":207,\"explicitStatus\":\"clean\"}," +
+                            "{\"id\":\"explicit\",\"title\":\"Gold Digger\",\"artist\":\"Kanye West\",\"duration\":207,\"explicitStatus\":\"explicit\"}" +
+                            "]}}}")
+                    };
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{\"subsonic-response\":{\"status\":\"ok\"}}")
+                };
+            });
+
+        var result = await _service.GetLocalIdForExternalSongAsync("qobuz", "43");
+
+        Assert.Equal("explicit", result);
     }
 }

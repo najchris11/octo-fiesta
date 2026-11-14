@@ -627,6 +627,7 @@ public class QobuzMetadataService : IMusicMetadataService
         
         // Add additional metadata for full track
         if (track.TryGetProperty("composer", out var composer) &&
+            composer.ValueKind == JsonValueKind.Object &&
             composer.TryGetProperty("name", out var composerName))
         {
             song.Contributors = new List<string> { composerName.GetString() ?? "" };
@@ -659,7 +660,8 @@ public class QobuzMetadataService : IMusicMetadataService
                 }
             }
             
-            if (album.TryGetProperty("tracks_count", out var tracksCount))
+            if (album.TryGetProperty("tracks_count", out var tracksCount) &&
+                tracksCount.ValueKind == JsonValueKind.Number)
             {
                 song.TotalTracks = tracksCount.GetInt32();
             }

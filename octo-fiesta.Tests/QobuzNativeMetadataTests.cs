@@ -91,4 +91,14 @@ public class QobuzNativeMetadataTests
         Assert.Equal("GBTEST000001", xml.Element(ns + "isrc")?.Value);
         Assert.Equal(expected, xml.Attribute("explicitStatus")?.Value);
     }
+
+    [Fact]
+    public async Task SearchToleratesNullComposerAndTrackCount()
+    {
+        var json = "{\"tracks\":{\"items\":[" +
+            "{\"id\":1,\"title\":\"Song\",\"composer\":null,\"album\":{\"id\":\"a\",\"title\":\"Album\",\"tracks_count\":null}}," +
+            Track(2) + "]}}";
+        var songs = await Create(json).SearchSongsAsync("Song");
+        Assert.Equal(new[] { "1", "2" }, songs.Select(s => s.ExternalId));
+    }
 }
